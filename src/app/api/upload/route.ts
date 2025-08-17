@@ -1,8 +1,7 @@
-import { writeFile } from "fs/promises";
-import path from "path";
 import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { put } from "@vercel/blob";
 
 
 const prisma = new PrismaClient();
@@ -24,7 +23,7 @@ export async function POST(req: Request) {
     const authorId = formData.get("authorId") as string;
     const category = formData.get("category") as string;
 
-    if (!title || !content || !authorId || !category) {
+    if (!file || !title || !content || !authorId || !category) {
       return NextResponse.json(
         { message: "Missing required fields." },
         { status: 400 }
@@ -32,21 +31,22 @@ export async function POST(req: Request) {
     }
   
     // Save image to /public/uploads
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    // const bytes = await file.arrayBuffer();
+    // const buffer = Buffer.from(bytes);
     const filename = `${Date.now()}-${file.name.replace(/\s+/g, "_")}`;
-    const uploadPath = path.join(process.cwd(), "public", "uploads");
-    const filePath = path.join(uploadPath, filename);
+    // const uploadPath = path.join(process.cwd(), "public", "uploads");
+    // const filePath = path.join(uploadPath, filename);
     const imageUrl = `/uploads/${filename}`;
+    const { url } = await put(imageUrl, file, { access: "public" });
 
-    await writeFile(filePath, buffer);
+    // await writeFile(filePath, buffer);
 
     // Create blog post with image and category
     const blog = await prisma.blog.create({
       data: {
         title,
         content,
-        image: imageUrl,
+        image: url,
         category, // Add the category field
         authorId,
       },
