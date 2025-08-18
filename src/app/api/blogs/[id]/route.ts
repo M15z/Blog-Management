@@ -97,7 +97,7 @@ export async function PUT(
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = params;
+  const { id } = await params;
   const formData = await request.formData();
 
   // Get form values
