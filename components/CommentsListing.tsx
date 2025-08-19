@@ -153,7 +153,7 @@ export default function CommentsLesting({
               {/* Comment Content */}
               <div className="min-w-0 flex-1">
                 <div className="text-sm md:text-base">
-                  <span className="mr-2 font-semibold text-gray-900">
+                  <span className="mr-2 block font-semibold text-gray-900">
                     {comment.author.name || "Anonymous"}
                   </span>
                   <span className="break-words text-gray-700">
