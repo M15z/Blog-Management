@@ -1,30 +1,9 @@
-"use client";
-
+'use client'
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import Image from "next/image";
-import { UserCircleIcon, PaperAirplaneIcon, MagnifyingGlassIcon } from "@heroicons/react/24/solid";
-import PusherClient from "pusher-js";
-
-// Custom hook for chat channel
-export function useChatChannel(conversationId: string, onNew: (m: any) => void) {
-  useEffect(() => {
-    if (!conversationId) return;
-    
-    const p = new PusherClient(process.env.NEXT_PUBLIC_PUSHER_KEY!, { 
-      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER! 
-    });
-    const ch = p.subscribe(`conversation-${conversationId}`);
-    ch.bind("new-message", onNew);
-    
-    return () => { 
-      ch.unbind_all(); 
-      ch.unsubscribe(); 
-      p.disconnect(); 
-    };
-  }, [conversationId, onNew]);
-}
+import { UserCircleIcon, PaperAirplaneIcon, MagnifyingGlassIcon, ArrowLeftIcon } from "@heroicons/react/24/solid";
 
 interface User {
   id: string;
@@ -61,34 +40,24 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isMounted, setIsMounted] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageInputRef = useRef<HTMLInputElement>(null);
 
+  // Fix hydration by ensuring client-side mounting
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   // Scroll to bottom of messages
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
-
-  // Handle new message from Pusher
-  const handleNewMessage = (message: Message) => {
-    setMessages(prev => [...prev, message]);
-    // Update conversation list with new message
-    setConversations(prev => 
-      prev.map(conv => 
-        conv.id === message.conversationId 
-          ? { ...conv, lastMessage: message, updatedAt: message.createdAt }
-          : conv
-      )
-    );
-  };
-
-  // Use chat channel hook
-  useChatChannel(activeConversation || "", handleNewMessage);
+  }, [messages, scrollToBottom]);
 
   // Fetch initial data
   useEffect(() => {
@@ -98,10 +67,12 @@ export default function ChatPage() {
     }
   }, [status]);
 
-  // Fetch conversations when active conversation changes
+  // Fetch messages when active conversation changes
   useEffect(() => {
     if (activeConversation) {
       fetchMessages(activeConversation);
+    } else {
+      setMessages([]);
     }
   }, [activeConversation]);
 
@@ -182,8 +153,11 @@ export default function ChatPage() {
         }),
       });
 
-      if (!response.ok) {
-        setNewMessage(messageContent); // Restore message on error
+      if (response.ok) {
+        const newMsg = await response.json();
+        setMessages(prev => [...prev, newMsg]);
+      } else {
+        setNewMessage(messageContent);
         throw new Error("Failed to send message");
       }
     } catch (error) {
@@ -194,8 +168,13 @@ export default function ChatPage() {
     }
   };
 
+  const handleBackToConversations = () => {
+    setActiveConversation(null);
+    setMessages([]);
+  };
+
   // Loading and authentication checks
-  if (status === "loading") {
+  if (status === "loading" || !isMounted) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -213,13 +192,17 @@ export default function ChatPage() {
 
   // Filter users based on search
   const filteredUsers = users.filter(user =>
-    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchQuery.toLowerCase())
+    user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   // Get active conversation details
   const activeConv = conversations.find(c => c.id === activeConversation);
   const chatPartner = activeConv?.participants.find(p => p.id !== session?.user?.id);
+
+  // Mobile-first approach - determine what to show
+  const showSidebar = !activeConversation;
+  const showChat = activeConversation;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -227,7 +210,7 @@ export default function ChatPage() {
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
           <div className="flex h-[calc(100vh-8rem)]">
             {/* Sidebar */}
-            <div className="w-full sm:w-80 border-r border-gray-200 flex flex-col">
+            <div className={`w-full lg:w-80 border-r border-gray-200 flex flex-col ${activeConversation ? 'hidden lg:flex' : 'flex'}`}>
               {/* Header */}
               <div className="p-4 sm:p-6 border-b border-gray-200">
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4">
@@ -268,7 +251,7 @@ export default function ChatPage() {
                             {partner?.image ? (
                               <Image
                                 src={partner.image}
-                                alt={partner.name}
+                                alt={partner.name || "User"}
                                 width={40}
                                 height={40}
                                 className="rounded-full object-cover"
@@ -278,7 +261,7 @@ export default function ChatPage() {
                             )}
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-gray-900 truncate">
-                                {partner?.name}
+                                {partner?.name || "Unknown User"}
                               </p>
                               {conversation.lastMessage && (
                                 <p className="text-xs text-gray-500 truncate">
@@ -311,7 +294,7 @@ export default function ChatPage() {
                                 {user.image ? (
                                   <Image
                                     src={user.image}
-                                    alt={user.name}
+                                    alt={user.name || "User"}
                                     width={40}
                                     height={40}
                                     className="rounded-full object-cover"
@@ -321,7 +304,7 @@ export default function ChatPage() {
                                 )}
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-medium text-gray-900 truncate">
-                                    {user.name}
+                                    {user.name || "Unknown User"}
                                   </p>
                                   <p className="text-xs text-gray-500 truncate">
                                     {user.email}
@@ -338,23 +321,24 @@ export default function ChatPage() {
             </div>
 
             {/* Chat Area */}
-            <div className={`flex-1 flex flex-col ${!activeConversation ? 'hidden sm:flex' : ''}`}>
-              {activeConversation ? (
-                <>
-                  {/* Chat Header */}
-                  <div className="p-4 sm:p-6 border-b border-gray-200 bg-white">
-                    <div className="flex items-center justify-between">
+            <div className={`flex-1 flex flex-col ${!activeConversation ? 'hidden lg:flex' : 'flex'}`}>
+                {activeConversation ? (
+                  <>
+                    {/* Chat Header with Back Button */}
+                    <div className="p-4 sm:p-6 border-b border-gray-200 bg-white">
                       <div className="flex items-center space-x-3">
+                        {/* Back button - visible on mobile */}
                         <button
-                          onClick={() => setActiveConversation(null)}
-                          className="sm:hidden p-2 text-gray-500 hover:text-gray-700"
+                          onClick={handleBackToConversations}
+                          className="lg:hidden p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
                         >
-                          ←
+                          <ArrowLeftIcon className="h-5 w-5" />
                         </button>
+                        
                         {chatPartner?.image ? (
                           <Image
                             src={chatPartner.image}
-                            alt={chatPartner.name}
+                            alt={chatPartner.name || "User"}
                             width={40}
                             height={40}
                             className="rounded-full object-cover"
@@ -362,83 +346,88 @@ export default function ChatPage() {
                         ) : (
                           <UserCircleIcon className="h-10 w-10 text-gray-300" />
                         )}
-                        <div>
-                          <h2 className="text-lg font-semibold text-gray-900">
-                            {chatPartner?.name}
+                        <div className="flex-1 min-w-0">
+                          <h2 className="text-lg font-semibold text-gray-900 truncate">
+                            {chatPartner?.name || "Unknown User"}
                           </h2>
-                          <p className="text-sm text-gray-500">{chatPartner?.email}</p>
+                          <p className="text-sm text-gray-500 truncate">{chatPartner?.email}</p>
                         </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Messages */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                    {messages.map((message) => {
-                      const isOwn = message.senderId === session?.user?.id;
-                      return (
-                        <div
-                          key={message.id}
-                          className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
-                        >
-                          <div className={`max-w-xs sm:max-w-md px-4 py-2 rounded-lg ${
-                            isOwn 
-                              ? 'bg-indigo-600 text-white' 
-                              : 'bg-gray-100 text-gray-900'
-                          }`}>
-                            <p className="text-sm sm:text-base">{message.content}</p>
-                            <p className={`text-xs mt-1 ${
-                              isOwn ? 'text-indigo-200' : 'text-gray-500'
-                            }`}>
-                              {new Date(message.createdAt).toLocaleTimeString([], {
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </p>
-                          </div>
+                    {/* Messages */}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                      {messages.length === 0 ? (
+                        <div className="flex-1 flex items-center justify-center text-gray-500">
+                          <p>No messages yet. Start the conversation!</p>
                         </div>
-                      );
-                    })}
-                    <div ref={messagesEndRef} />
-                  </div>
-
-                  {/* Message Input */}
-                  <form onSubmit={sendMessage} className="p-4 border-t border-gray-200 bg-white">
-                    <div className="flex space-x-2">
-                      <input
-                        ref={messageInputRef}
-                        type="text"
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        placeholder="Type a message..."
-                        className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-600 focus:border-indigo-600 outline-none"
-                        disabled={sending}
-                      />
-                      <button
-                        type="submit"
-                        disabled={!newMessage.trim() || sending}
-                        className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <PaperAirplaneIcon className="h-5 w-5" />
-                      </button>
+                      ) : (
+                        messages.map((message) => {
+                          const isOwn = message.senderId === session?.user?.id;
+                          return (
+                            <div
+                              key={message.id}
+                              className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+                            >
+                              <div className={`max-w-xs sm:max-w-md px-4 py-2 rounded-lg ${
+                                isOwn 
+                                  ? 'bg-indigo-600 text-white' 
+                                  : 'bg-gray-100 text-gray-900'
+                              }`}>
+                                <p className="text-sm sm:text-base">{message.content}</p>
+                                <p className={`text-xs mt-1 ${
+                                  isOwn ? 'text-indigo-200' : 'text-gray-500'
+                                }`}>
+                                  {new Date(message.createdAt).toLocaleTimeString([], {
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                      <div ref={messagesEndRef} />
                     </div>
-                  </form>
-                </>
-              ) : (
-                /* Empty State */
-                <div className="flex-1 flex items-center justify-center p-8">
-                  <div className="text-center">
-                    <div className="text-6xl mb-4">💬</div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                      Start a Conversation
-                    </h3>
-                    <p className="text-gray-500 max-w-sm">
-                      Search for users and select someone to start chatting with them.
-                    </p>
+
+                    {/* Message Input */}
+                    <form onSubmit={sendMessage} className="p-4 border-t border-gray-200 bg-white">
+                      <div className="flex space-x-2">
+                        <input
+                          ref={messageInputRef}
+                          type="text"
+                          value={newMessage}
+                          onChange={(e) => setNewMessage(e.target.value)}
+                          placeholder="Type a message..."
+                          className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-600 focus:border-indigo-600 outline-none"
+                          disabled={sending}
+                        />
+                        <button
+                          type="submit"
+                          disabled={!newMessage.trim() || sending}
+                          className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <PaperAirplaneIcon className="h-5 w-5" />
+                        </button>
+                      </div>
+                    </form>
+                  </>
+                ) : (
+                  /* Empty State - Only visible on desktop */
+                  <div className="hidden lg:flex flex-1 items-center justify-center p-8">
+                    <div className="text-center">
+                      <div className="text-6xl mb-4">💬</div>
+                      <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                        Start a Conversation
+                      </h3>
+                      <p className="text-gray-500 max-w-sm">
+                        Search for users and select someone to start chatting with them.
+                      </p>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
           </div>
         </div>
       </div>

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Button } from "./ui/button";
 import { usePathname } from "next/navigation";
+import ChatButtonIcon from "./ui/ChatButtonIcon";
 
 export default function Navbar() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -46,31 +47,37 @@ export default function Navbar() {
           </span>
         </Link>
         <div className="flex items-center space-x-3 md:order-2 md:space-x-0 rtl:space-x-reverse">
+          
           <div className="relative">
             {/* check for session if its null or not */}
             {session ? (
-              <button
-                type="button"
-                className="flex rounded-full bg-gray-800 text-sm focus:ring-4 focus:ring-gray-300 md:me-0 dark:focus:ring-gray-600"
-                id="user-menu-button"
-                aria-expanded={isDropdownOpen}
-                onClick={toggleDropdown}
-              >
-                <span className="sr-only">Open user menu</span>
-                {session.user?.image ? (
-                  <Image
-                    className="rounded-full"
-                    src={session.user.image}
-                    alt="user photo"
-                    width={50}
-                    height={50}
-                  />
-                ) : (
-                  <div className="flex h-[50px] w-[50px] items-center justify-center rounded-full bg-blue-500 text-xl font-bold text-white">
-                    {session.user?.name?.[0] || "?"}
-                  </div>
-                )}
-              </button>
+              <div className="flex items-center space-x-3">
+                <Link href="/chat">
+                  <ChatButtonIcon />
+                </Link>
+                <button
+                  type="button"
+                  className="flex rounded-full bg-gray-800 text-sm focus:ring-4 focus:ring-gray-300 md:me-0 dark:focus:ring-gray-600"
+                  id="user-menu-button"
+                  aria-expanded={isDropdownOpen}
+                  onClick={toggleDropdown}
+                >
+                  <span className="sr-only">Open user menu</span>
+                  {session.user?.image ? (
+                    <Image
+                      className="rounded-full"
+                      src={session.user.image}
+                      alt="user photo"
+                      width={50}
+                      height={50}
+                    />
+                  ) : (
+                    <div className="flex h-[50px] w-[50px] items-center justify-center rounded-full bg-blue-500 text-xl font-bold text-white">
+                      {session.user?.name?.[0] || "?"}
+                    </div>
+                  )}
+                </button>
+              </div>
             ) : (
               <Button
                 // onClick={() => signIn()}

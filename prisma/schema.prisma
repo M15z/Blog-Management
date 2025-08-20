@@ -26,39 +26,42 @@ model User {
   blogs         Blog[]
   comments      Comment[]
   likes         Like[]
-  participants ConversationParticipant[]
-  messages     Message[]
+  // Chat relationships (many-to-many)
+  conversations Conversation[] @relation("UserConversations")
+  messages      Message[]      @relation("UserMessages")
+  @@map("users")
+
 }
 
+
+// Add these new models
 model Conversation {
-  id           String                     @id @default(cuid())
-  createdAt    DateTime                   @default(now())
-  updatedAt    DateTime                   @updatedAt
-  participants ConversationParticipant[]
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Many-to-many relationship with users
+  participants User[]    @relation("UserConversations")
   messages     Message[]
-
-  // Optional: enforce 1:1 uniqueness (sorted pair key)
-  pairKey String? @unique
+  
+  @@map("conversations")
 }
 
-model ConversationParticipant {
-  id             String        @id @default(cuid())
-  userId         String
-  conversationId String
-  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, conversationId]) // a user joins a conversation only once
-}
 
 model Message {
-  id             String        @id @default(cuid())
-  conversationId String
+  id             String   @id @default(cuid())
+  content        String
+  createdAt      DateTime @default(now())
+  
+  // Foreign keys
   senderId       String
-  content        String        // text; or store Blob URL for images
-  createdAt      DateTime      @default(now())
-  conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender         User          @relation(fields: [senderId], references: [id])
+  conversationId String
+  
+  // Relationships
+  sender         User         @relation("UserMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  @@map("messages")
 }
 
 model Account {

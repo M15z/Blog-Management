@@ -1,23 +1,31 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { PrismaClient } from "@prisma/client";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import Pusher from "pusher";
 
 const prisma = new PrismaClient();
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+const pusher = new Pusher({
+  appId: process.env.PUSHER_APP_ID!,
+  key: process.env.PUSHER_KEY!,
+  secret: process.env.PUSHER_SECRET!,
+  cluster: process.env.PUSHER_CLUSTER!,
+  useTLS: true,
+});
+
+export async function POST(request: NextRequest) {
   try {
-    const {id} = await params;
     const session = await auth();
     
     if (!session?.user?.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const conversationId = id;
+    const { content, conversationId } = await request.json();
+
+    if (!content?.trim()) {
+      return NextResponse.json({ error: "Message content is required" }, { status: 400 });
+    }
 
     const currentUser = await prisma.user.findUnique({
       where: { email: session.user.email },
@@ -43,8 +51,11 @@ export async function GET(
       return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
     }
 
-    const messages = await prisma.message.findMany({
-      where: {
+    // Create message
+    const message = await prisma.message.create({
+      data: {
+        content: content.trim(),
+        senderId: currentUser.id,
         conversationId,
       },
       include: {
@@ -57,19 +68,25 @@ export async function GET(
           },
         },
       },
-      orderBy: {
-        createdAt: 'asc',
-      },
     });
 
-    const formattedMessages = messages.map(message => ({
+    // Update conversation timestamp
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { updatedAt: new Date() },
+    });
+
+    // Send real-time message via Pusher
+    const formattedMessage = {
       ...message,
       createdAt: message.createdAt.toISOString(),
-    }));
+    };
 
-    return NextResponse.json(formattedMessages);
+    await pusher.trigger(`conversation-${conversationId}`, "new-message", formattedMessage);
+
+    return NextResponse.json(formattedMessage);
   } catch (error) {
-    console.error("Error fetching messages:", error);
+    console.error("Error sending message:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   } finally {
     await prisma.$disconnect();
