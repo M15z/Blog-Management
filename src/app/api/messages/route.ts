@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import Pusher from "pusher";
 
 const prisma = new PrismaClient();
+export const dynamic = 'force-dynamic';
 
 const pusher = new Pusher({
   appId: process.env.PUSHER_APP_ID!,
