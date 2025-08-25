@@ -90,12 +90,6 @@ Originally developed and tested on a **Raspberry Pi 5** with **PostgreSQL** via 
 
 ---
 
-## 📸 Screenshots  
-
-> *(Optional: Add screenshots of the blog UI, chat feature, etc.)*  
-
----
-
 ## 🌍 Deployment  
 
 The project is live on **Vercel**, fully integrated with:  
