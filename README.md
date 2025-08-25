@@ -32,7 +32,7 @@ Originally developed and tested on a **Raspberry Pi 5** with **PostgreSQL** via 
 - **Hosting:** Vercel  
 - **Storage:** Vercel Blob (for images/media)  
 - **Real-time Messaging:** Pusher Channels  
-- **Dev Environment:** Raspberry Pi 5 (8GB, Arch + Hyprland)  
+- **Dev Environment:** Raspberry Pi 5 (8GB,Raspberry Pi OS)  
 
 ---
 
